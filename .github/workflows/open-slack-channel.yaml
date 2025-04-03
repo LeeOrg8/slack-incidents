@@ -17,7 +17,6 @@ on:
       port_context:
         description: Details of the action and general port_context (blueprint, run ID, etc...).
         required: true
-
 jobs:
   open-slack-channel:
     runs-on: ubuntu-latest
@@ -40,8 +39,7 @@ jobs:
           response=$(curl -s -X POST "https://slack.com/api/conversations.create" \
             -H "Authorization: Bearer $SLACK_TOKEN" \
             -H "Content-Type: application/json" \
-            --data "{\"name\": \"${{ github.event.inputs.channel_name }}\",\"is_private\": ${{
-              github.event.inputs.is_private }} }")
+            --data "{\"name\": \"${{ github.event.inputs.channel_name }}\",\"is_private\": ${{ github.event.inputs.is_private }} }")
 
           echo "API Response: $response"
 
@@ -89,4 +87,23 @@ jobs:
         env:
           SLACK_TOKEN: ${{ secrets.BOT_USER_OAUTH_TOKEN }}
           CHANNEL_ID: ${{env.CHANNEL_ID}}
-          CLIENT
+          CLIENT_ID: ${{ secrets.PORT_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.PORT_CLIENT_SECRET }}
+          RUN_ID: ${{ fromJson(github.event.inputs.port_context).runId }}
+          MEMBER_EMAILS: ${{ toJSON(github.event.inputs.members) }}
+        run: |
+          cd slack
+          chmod +x add-members-to-channel.sh
+          bash add-members-to-channel.sh "$SLACK_TOKEN" "$CHANNEL_ID" "$CLIENT_ID" "$CLIENT_SECRET" "$RUN_ID" "$MEMBER_EMAILS"
+
+      - name: Log Successful Action
+        if: steps.add_members.outcome == 'failure'
+        uses: port-labs/port-github-action@v1
+        with:
+          clientId: ${{ secrets.PORT_CLIENT_ID }}
+          clientSecret: ${{ secrets.PORT_CLIENT_SECRET }}
+          baseUrl: https://api.getport.io
+          operation: PATCH_RUN
+          status: "FAILURE"
+          runId: ${{ fromJson(github.event.inputs.port_context).runId }}
+          logMessage: "Failed to add members to channel ❌"
